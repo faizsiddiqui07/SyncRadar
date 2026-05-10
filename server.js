@@ -14,7 +14,7 @@ app.get("/", (req, res) => {
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
     cors: { 
-      origin: ["http://localhost:3000", "https://syncradar.netlify.app"], 
+      origin: ["http://localhost:3000","http://localhost:3001", "https://syncradar.netlify.app"], 
       methods: ["GET", "POST"] 
     }
   });
