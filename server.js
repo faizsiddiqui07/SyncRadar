@@ -33,6 +33,15 @@ io.on("connection", (socket) => {
     socket.broadcast.emit("new-peer-detected", newUser);
   });
 
+  socket.on("send-chat", (data) => {
+    socket.broadcast.emit("receive-chat", data);
+  });
+
+  socket.on("send-private-chat", (data) => {
+    // Ye line message ko sirf target user (data.to) tak bhejti hai
+    socket.to(data.to).emit("receive-private-chat", data);
+  });
+
   socket.on("file-request", (data) => socket.to(data.to).emit("file-request", data));
   socket.on("file-response", (data) => socket.to(data.to).emit("file-response", data));
   socket.on("offer", (data) => socket.to(data.to).emit("offer", { from: socket.id, offer: data.offer }));
