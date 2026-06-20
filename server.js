@@ -42,11 +42,64 @@ io.on("connection", (socket) => {
     socket.to(data.to).emit("receive-private-chat", data);
   });
 
-  socket.on("file-request", (data) => socket.to(data.to).emit("file-request", data));
-  socket.on("file-response", (data) => socket.to(data.to).emit("file-response", data));
-  socket.on("offer", (data) => socket.to(data.to).emit("offer", { from: socket.id, offer: data.offer }));
-  socket.on("answer", (data) => socket.to(data.to).emit("answer", { from: socket.id, answer: data.answer }));
-  socket.on("ice-candidate", (data) => socket.to(data.to).emit("ice-candidate", { from: socket.id, candidate: data.candidate }));
+  // Only relay to a currently-connected target socket.
+  const isValidTarget = (data) => data && activeUsers.has(data.to);
+
+  socket.on("file-request", (data) => {
+    if (!isValidTarget(data)) return;
+    // Never trust client-supplied identity — derive it from the authenticated socket.
+    const sender = activeUsers.get(socket.id);
+    socket.to(data.to).emit("file-request", {
+      ...data,
+      from: socket.id,
+      senderName: sender ? sender.name : "Unknown",
+    });
+  });
+
+  socket.on("file-response", (data) => {
+    if (!isValidTarget(data)) return;
+    const responder = activeUsers.get(socket.id);
+    socket.to(data.to).emit("file-response", {
+      ...data,
+      from: socket.id,
+      receiverName: responder ? responder.name : "Unknown",
+    });
+  });
+
+  socket.on("offer", (data) => {
+    if (!isValidTarget(data)) return;
+    socket.to(data.to).emit("offer", { from: socket.id, offer: data.offer });
+  });
+  socket.on("answer", (data) => {
+    if (!isValidTarget(data)) return;
+    socket.to(data.to).emit("answer", { from: socket.id, answer: data.answer });
+  });
+  socket.on("ice-candidate", (data) => {
+    if (!isValidTarget(data)) return;
+    socket.to(data.to).emit("ice-candidate", { from: socket.id, candidate: data.candidate });
+  });
+
+  // Typing indicator (server stamps the trusted sender name)
+  socket.on("typing", (data) => {
+    if (!isValidTarget(data)) return;
+    const sender = activeUsers.get(socket.id);
+    socket.to(data.to).emit("typing", {
+      from: socket.id,
+      senderName: sender ? sender.name : "Unknown",
+      isTyping: !!data.isTyping,
+    });
+  });
+
+  // Chat delivery acknowledgement (→ double-tick on the sender's side)
+  socket.on("chat-ack", (data) => {
+    if (!isValidTarget(data)) return;
+    const sender = activeUsers.get(socket.id);
+    socket.to(data.to).emit("chat-ack", {
+      from: socket.id,
+      senderName: sender ? sender.name : "Unknown",
+      msgId: data.msgId,
+    });
+  });
 
   socket.on("disconnect", () => {
     console.log("🔴 Peer Disconnected:", socket.id);
