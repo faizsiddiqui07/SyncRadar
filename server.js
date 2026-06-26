@@ -14,7 +14,7 @@ app.get("/", (req, res) => {
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
     cors: { 
-      origin: ["http://localhost:3000","http://localhost:3001", "https://syncradar.netlify.app"], 
+      origin: ["http://localhost:3000","http://localhost:3001","http://localhost:3002", "https://syncradar.netlify.app"], 
       methods: ["GET", "POST"] 
     }
   });
@@ -98,6 +98,40 @@ io.on("connection", (socket) => {
       from: socket.id,
       senderName: sender ? sender.name : "Unknown",
       msgId: data.msgId,
+    });
+  });
+
+  // --- Screen sharing signaling (separate from file-transfer offer/answer/ice) ---
+  socket.on("screen-offer", (data) => {
+    if (!isValidTarget(data)) return;
+    const sender = activeUsers.get(socket.id);
+    socket.to(data.to).emit("screen-offer", {
+      from: socket.id,
+      senderName: sender ? sender.name : "Unknown",
+      offer: data.offer,
+    });
+  });
+  socket.on("screen-answer", (data) => {
+    if (!isValidTarget(data)) return;
+    socket.to(data.to).emit("screen-answer", { from: socket.id, answer: data.answer });
+  });
+  socket.on("screen-ice", (data) => {
+    if (!isValidTarget(data)) return;
+    socket.to(data.to).emit("screen-ice", { from: socket.id, candidate: data.candidate });
+  });
+  socket.on("screen-stop", (data) => {
+    if (!isValidTarget(data)) return;
+    socket.to(data.to).emit("screen-stop", { from: socket.id });
+  });
+  // Remote pointer / annotation over the shared screen (normalized x,y 0..1)
+  socket.on("screen-annotate", (data) => {
+    if (!isValidTarget(data)) return;
+    const sender = activeUsers.get(socket.id);
+    socket.to(data.to).emit("screen-annotate", {
+      from: socket.id,
+      senderName: sender ? sender.name : "Unknown",
+      x: data.x,
+      y: data.y,
     });
   });
 
