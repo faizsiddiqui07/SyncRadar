@@ -20,6 +20,7 @@ const io = new Server(httpServer, {
   });
 
 const activeUsers = new Map();
+const screenPins = new Map(); // pin -> host socketId (screen-share access PIN)
 
 io.on("connection", (socket) => {
   console.log("🟢 Peer Connected:", socket.id);
@@ -123,21 +124,34 @@ io.on("connection", (socket) => {
     if (!isValidTarget(data)) return;
     socket.to(data.to).emit("screen-stop", { from: socket.id });
   });
-  // Remote pointer / annotation over the shared screen (normalized x,y 0..1)
-  socket.on("screen-annotate", (data) => {
-    if (!isValidTarget(data)) return;
-    const sender = activeUsers.get(socket.id);
-    socket.to(data.to).emit("screen-annotate", {
+  // Host registers a 6-digit PIN for their screen
+  socket.on("screen-host", (data) => {
+    if (!data || typeof data.pin !== "string") return;
+    for (const [pin, id] of screenPins) if (id === socket.id) screenPins.delete(pin);
+    screenPins.set(data.pin, socket.id);
+  });
+  socket.on("screen-unhost", () => {
+    for (const [pin, id] of screenPins) if (id === socket.id) screenPins.delete(pin);
+  });
+  // Viewer asks to connect to a host's screen using their PIN
+  socket.on("screen-connect", (data) => {
+    if (!data || typeof data.pin !== "string") return;
+    const hostId = screenPins.get(data.pin);
+    if (!hostId || !activeUsers.has(hostId)) {
+      socket.emit("screen-pin-invalid");
+      return;
+    }
+    const viewer = activeUsers.get(socket.id);
+    io.to(hostId).emit("screen-viewer", {
       from: socket.id,
-      senderName: sender ? sender.name : "Unknown",
-      x: data.x,
-      y: data.y,
+      name: viewer ? viewer.name : "Someone",
     });
   });
 
   socket.on("disconnect", () => {
     console.log("🔴 Peer Disconnected:", socket.id);
     activeUsers.delete(socket.id);
+    for (const [pin, id] of screenPins) if (id === socket.id) screenPins.delete(pin);
     io.emit("peer-disconnected", socket.id);
   });
 });
